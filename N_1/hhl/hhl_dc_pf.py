@@ -24,13 +24,6 @@ def import_status():
 from qiskit import Aer, execute
 from qiskit.algorithms.linear_solvers.hhl import HHL
 
-# Imports for solve_hhl_tomo()
-import time
-import hhl.IBM_credentials as ibm
-from qiskit.compiler import transpile
-from qiskit.tools.monitor import job_monitor
-from qiskit.ignis.verification.tomography import state_tomography_circuits, StateTomographyFitter
-
 backend_sim = Aer.get_backend("statevector_simulator") # backend_sim = Aer.get_backend('aer_simulator')
 hhl = HHL(1e-3) # The default is Statevector simulation , quantum_instance=backend_sim
 
@@ -84,105 +77,6 @@ def solve_hhl_sv(matrix, vector):
         
     # print('Result: ', np.abs(amplitudes)*np.sign(np.real(amplitudes)))
     return np.abs(amplitudes)*np.sign(np.real(amplitudes))
-    
-def solve_hhl_tomo(matrix, vector, sim=True, error_correction=False):
-    
-    if error_correction:
-        Niter = 10
-    else:
-        Niter = 1
-        
-    astar = 0
-    tol = 1e-6
-    for n in range(Niter):
-        bNorm = np.linalg.norm(vector)
-    
-        hhl_circuit = hhl.construct_circuit(matrix, vector, neg_vals=False)
-        t = time.time()
-    
-        num_qubits = int(np.log2(vector.shape[0])) # number of variables (assuming n=2^k)
-        total_qubits = hhl_circuit.num_qubits
-        
-        qubits = []
-        for k in range(num_qubits):
-            qubits.append(k)
-        qubits.append(total_qubits-1)
-        
-        qst = state_tomography_circuits(hhl_circuit, qubits)
-        Shots = 2**12
-        if sim:
-            circuitToRun = transpile(qst, basis_gates=['id', 'rz', 'sx', 'x', 'cx'], optimization_level=1)
-            job = execute(circuitToRun, backend = Aer.get_backend('qasm_simulator'), shots = Shots)
-        else:
-            backend_real = ibm.get_real_backend()
-            circuitToRun = transpile(qst, basis_gates=['id', 'rz', 'sx', 'x', 'cx'], optimization_level=1)
-            job = execute(circuitToRun, backend = backend_real, shots = Shots)
-            job_monitor(job)
-           
-        depth = circuitToRun[0].depth()
-        ops = circuitToRun[0].count_ops()
-        print('Time taken:', time.time() - t)
-        
-        tomo = StateTomographyFitter(job.result(), qst)
-        
-        rho = tomo.fit()
-        
-        amp = np.zeros(len(vector),dtype=complex)
-        signs = np.zeros(len(vector),dtype=complex)
-        for i, a in enumerate(rho):
-    
-            # get binary representation
-            b = ("{0:0%sb}" % (num_qubits+1)).format(i)
-             
-            i_normal = int(b[-num_qubits:], 2)
-            if int(b[0], 2) == 1:
-    
-                amp[i_normal] += bNorm*np.sqrt(a[i])
-    
-                signs[i_normal] += rho[2**(num_qubits),i]
-                
-                
-        amplitudes = abs(amp)*np.sign(signs.real)*np.sign(vector[0])
-        
-        # Error correction
-        astar = astar + amplitudes
-        error = np.linalg.norm(matrix@amplitudes - vector)
-        print('Error: ', error)
-        if error <= tol: 
-            break
-        vector = vector-matrix@amplitudes 
-
-    return astar, depth, ops
-
-def solve_random(matrix, vector):
-    
-    Niter = 1000
-
-    astar = 0
-    tol = 1e-6
-    for n in range(Niter):
-        bNorm = np.linalg.norm(vector)
-
-        amplitudes = np.random.random(len(vector))*vector
-        
-        # Error correction
-        astar += amplitudes
-        error = np.linalg.norm(matrix@amplitudes - vector)
-        print('\nIteration nº: %d' % n)
-        print('vector_0:\t ', vector)
-        print('bNorm:\t ', bNorm)
-        print('amplitudes:\t ', amplitudes)
-        print('astar:\t ', astar)
-        print('error:\t ', error)
-        
-        # print('Error: ', error)
-        if error <= tol: 
-            print(n)
-            break
-        vector = vector-matrix@amplitudes 
-        print('vector_1:\t ', vector)
-
-    return astar
 
 #%% HHL Test
 

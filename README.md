@@ -21,7 +21,7 @@ The main folder (_N_1_) is structured as follows:
 - _hhl/_
   - hhl_ac_pf.py
   - hhl_dc_pf.py
-  - IBM_credentials.py   
+  - IBM_credentials.py
 - _other/_
   - qiskit_code_example.py 
 - _postpro/_
